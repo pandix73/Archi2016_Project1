@@ -148,13 +148,13 @@ void read_i_memory(int load_num){
 			case j:
 				printf("j\n");
 				C_26 = i_memory[i] << 6 >> 6;
-				PC = PC >> 28 << 28 | (unsigned int)C << 2;
+				PC = PC >> 28 << 28 | (unsigned int)C_26 << 2;
 				break;
 			case jal:
 				printf("jal\n");
-				C = i_memory[i] << 6 >> 6;
+				C_26 = i_memory[i] << 6 >> 6;
 				reg[31] = PC;
-				PC = PC >> 28 << 28 | (unsigned int)C << 2;
+				PC = PC >> 28 << 28 | (unsigned int)C_26 << 2;
 				break;
 			case halt: 
 				printf("halt\n");
@@ -176,7 +176,7 @@ void read_i_memory(int load_num){
 						break;
 					case lw:
 						printf("lw\n");
-						reg[rt] = (char)d_memory[addr] << 24 | (char)d_memory[addr+1] << 16 | (char)d_memory[addr+2] << 8 | (char)d_memory[addr+3];
+						reg[rt] = d_memory[addr] << 24 | d_memory[addr+1] << 16 | d_memory[addr+2] << 8 | d_memory[addr+3];
 						break;
 					case lh:
 						printf("lh\n");
