@@ -48,7 +48,7 @@ char *i_buffer, *d_buffer;
 size_t i_result, d_result;
 unsigned int PC, i_memory[1024];
 unsigned int sp, d_data[256];
-char d_memory[1024];
+unsigned char d_memory[1024];
 unsigned int reg[32];
 
 void read_d_memory(int load_num){
@@ -57,8 +57,13 @@ void read_d_memory(int load_num){
 		//change 12 34 56 78  to  78 56 34 12
 		d_data[i] = d_data[i] << 24 | d_data[i] >> 8 << 24 >> 8 | d_data[i] >> 16 << 24 >> 16 | d_data[i] >> 24;
 	}
+	reg[29] = d_data[0];
 	for(i = 0; i < d_data[1]; i++){
-		d_memory[i * 4] = 
+		d_memory[i*4] = d_data[i+2] >> 24;
+		d_memory[i*4 + 1] = d_data[i+2] << 8 >> 24;
+		d_memory[i*4 + 2] = d_data[i+2] << 16 >> 24;
+		d_memory[i*4 + 3] = d_data[i+2] << 24 >> 24;
+		//printf("%X, %X, %X, %X\n", d_memory[i*4], d_memory[i*4+1], d_memory[i*4+2], d_memory[i*4+3]);
 	}
 }
 
@@ -70,7 +75,9 @@ void read_i_memory(int load_num){
 		//change 12 34 56 78  to  78 56 34 12
 		i_memory[i] = i_memory[i] << 24 | i_memory[i] >> 8 << 24 >> 8 | i_memory[i] >> 16 << 24 >> 16 | i_memory[i] >> 24;
 	}
-	// PC  printf("%u\n", i_memory[0]);	
+	//printf("%u\n", i_memory[0]);	
+	PC = i_memory[0];
+	int cycle = 0;
 	for(i = 2; i < load_num; i++){
 		opcode = i_memory[i] >> 26;
 		printf("%08X ", i_memory[i]);
@@ -132,14 +139,13 @@ void read_i_memory(int load_num){
 						reg[rd] = reg[rt] >> shamt;
 						break;
 					case jr:
-						//PC_now = 4*i + PC
+						//PC_now = 4*(i-1) + PC
 						//PC_now = reg[rs]
 						printf("jr\n");
-						i = reg[rs] >> 2 - PC >> 2 - 1;
+						i = reg[rs] >> 2 - PC >> 2 + 2 - 1;
 						break;
 				}
 				break;
-
 			case j:
 				//PC_now = (PC_now+4)>>28<<28 | C<<2
 				//PC_now = 4*i + PC
@@ -155,6 +161,7 @@ void read_i_memory(int load_num){
 				break;
 			case halt: 
 				printf("halt\n");
+				return;
 				break;
 			default:
 				rs = i_memory[i] << 6 >> 27;
@@ -172,19 +179,19 @@ void read_i_memory(int load_num){
 						break;
 					case lw:
 						printf("lw\n");
-						reg[rt] = d_memory[addr] << 24 | d_memory[addr+1] << 16 + d_memory[addr+2] << 8 | d_memory[addr+3];
+						reg[rt] = (char)d_memory[addr] << 24 | (char)d_memory[addr+1] << 16 | (char)d_memory[addr+2] << 8 | (char)d_memory[addr+3];
 						break;
 					case lh:
 						printf("lh\n");
-						reg[rt] = d_memory[addr] << 8 + d_memory[addr+1];
+						reg[rt] = (char)d_memory[addr] << 8 | (char)d_memory[addr+1];
 						break;
 					case lhu:
-						printf("lhu\n");
-						reg[rt] = (unsigned char)d_memory[addr] << 8 + (unsigned char)d_memory[addr+1];
+						printf("lhu %d %d %hd\n", rs, rt, C);
+						reg[rt] = (unsigned char)d_memory[addr] << 8 | (unsigned char)d_memory[addr+1];
 						break;
 					case lb:
 						printf("lb\n");
-						reg[rt] = d_memory[reg[rs] + C];
+						reg[rt] = (char)d_memory[reg[rs] + C];
 						break;
 					case lbu:
 						printf("lbu\n");
@@ -234,9 +241,10 @@ void read_i_memory(int load_num){
 						printf("beq\n");
 						break;
 					case bne:
-						printf("bne\n");
+						printf("bne %d %d\n", rs, rt);
 						if(reg[rs] != reg[rt])
 							i = i + C;
+						printf("%d\n", i+1);
 						break;
 					case bgtz:
 						printf("bgtz\n");
@@ -248,6 +256,12 @@ void read_i_memory(int load_num){
 				}
 			break;
 		}
+
+		printf("cycle%d:\n", ++cycle);
+		int reg_n;
+		for(reg_n = 0; reg_n < 32; reg_n++){
+			printf("$%02d:0x%08X\n", reg_n, reg[reg_n]);
+		}printf("PC:%X\n", 4*(i-1)+PC);
 	}
 }
 
@@ -309,9 +323,9 @@ int main () {
 	//make_i_memory(i_buffer);
 	//make_d_memory(d_buffer);
 	
-	read_i_memory(i_size/4);
 	read_d_memory(d_size/4); 
-	
+	read_i_memory(i_size/4);
+		
 	// terminate
 	fclose(i_file);
 	fclose(d_file);
