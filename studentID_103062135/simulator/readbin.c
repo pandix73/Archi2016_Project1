@@ -69,7 +69,7 @@ void read_d_memory(int load_num){
 
 void read_i_memory(int load_num){
 	unsigned int i, opcode;
-	int funct, rs, rt, rd, shamt;
+	int funct, rs, rt, rd, shamt, C_26;
 	short C;
 	for(i = 0; i < load_num; i++){
 		//change 12 34 56 78  to  78 56 34 12
@@ -78,9 +78,10 @@ void read_i_memory(int load_num){
 	//printf("%u\n", i_memory[0]);	
 	PC = i_memory[0];
 	int cycle = 0;
-	for(i = 2; i < load_num; i++){
+	for(i = 2; i < load_num; i = ((PC-i_memory[0]) >> 2) + 2){
 		opcode = i_memory[i] >> 26;
 		printf("%08X ", i_memory[i]);
+		PC = PC + 4;
 		//printf("\n");
 		switch(opcode){
 			case R: 
@@ -139,25 +140,21 @@ void read_i_memory(int load_num){
 						reg[rd] = reg[rt] >> shamt;
 						break;
 					case jr:
-						//PC_now = 4*(i-1) + PC
-						//PC_now = reg[rs]
 						printf("jr\n");
-						i = reg[rs] >> 2 - PC >> 2 + 2 - 1;
+						PC = reg[rs];
 						break;
 				}
 				break;
 			case j:
-				//PC_now = (PC_now+4)>>28<<28 | C<<2
-				//PC_now = 4*i + PC
 				printf("j\n");
-				C = i_memory[i] << 6 >> 6;
-				i = (((4 * i + PC + 4) >> 28 << 28 | C << 2) - PC) >> 2 - 1;
+				C_26 = i_memory[i] << 6 >> 6;
+				PC = PC >> 28 << 28 | (unsigned int)C << 2;
 				break;
 			case jal:
-				//PC_now = 4*i + PC
 				printf("jal\n");
 				C = i_memory[i] << 6 >> 6;
-				reg[31] = (PC + 4 * i) + 4;
+				reg[31] = PC;
+				PC = PC >> 28 << 28 | (unsigned int)C << 2;
 				break;
 			case halt: 
 				printf("halt\n");
@@ -234,34 +231,30 @@ void read_i_memory(int load_num){
 						printf("slti\n");
 						break;
 					case beq:
-						//PC_now = 4*i + PC
-						//PC_now + 4 + 4*C = 4*(i + 1 + C) + PC
 						if(reg[rs] == reg[rt])
-							i = i + C; // add 1 after each cycle
+							PC += C << 2;
 						printf("beq\n");
 						break;
 					case bne:
 						printf("bne %d %d\n", rs, rt);
 						if(reg[rs] != reg[rt])
-							i = i + C;
+							PC += C << 2;
 						printf("%d\n", i+1);
 						break;
 					case bgtz:
 						printf("bgtz\n");
 						if(reg[rs] > 0)
-							i = i + C;
-						break;
-					default:
+							PC += C << 2;
 						break;
 				}
-			break;
+				break;
 		}
 
 		printf("cycle%d:\n", ++cycle);
 		int reg_n;
 		for(reg_n = 0; reg_n < 32; reg_n++){
 			printf("$%02d:0x%08X\n", reg_n, reg[reg_n]);
-		}printf("PC:%X\n", 4*(i-1)+PC);
+		}printf("PC:%X\n", PC);
 	}
 }
 
