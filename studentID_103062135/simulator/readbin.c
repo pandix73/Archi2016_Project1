@@ -47,14 +47,23 @@ int i_size, d_size;
 char *i_buffer, *d_buffer;
 size_t i_result, d_result;
 unsigned int PC, i_memory[1024];
-unsigned int sp, d_memory[1024];
+unsigned int sp;
+char d_memory[1024];
 unsigned int reg[32];
 
 void read_i_memory(int load_num){
-	int i, opcode;
-	int funct, rs, rt, rd, shamt, C;
+	unsigned int i, opcode;
+	int funct, rs, rt, rd, shamt;
+	short C;
 	for(i = 0; i < load_num; i++){
+		//change 12 34 56 78  to  78 56 34 12
+		i_memory[i] = i_memory[i] << 24 | i_memory[i] >> 8 << 24 >> 8 | i_memory[i] >> 16 << 24 >> 16 | i_memory[i] >> 24;
+	}
+	// PC  printf("%u\n", i_memory[0]);	
+	for(i = 2; i < load_num; i++){
 		opcode = i_memory[i] >> 26;
+		printf("%08X ", i_memory[i]);
+		//printf("\n");
 		switch(opcode){
 			case R: 
 				funct = i_memory[i] << 26 >> 26;
@@ -100,7 +109,7 @@ void read_i_memory(int load_num){
 						reg[rd] = (reg[rs] < reg[rt]);
 						break;
 					case sll:
-						printf("all\n");
+						printf("sll\n");
 						reg[rd] = reg[rt] << shamt;
 						break;
 					case srl:
@@ -115,7 +124,7 @@ void read_i_memory(int load_num){
 						//PC_now = 4*i + PC
 						//PC_now = reg[rs]
 						printf("jr\n");
-						i = reg[rs] >> 2 - PC >> 2 - 1;
+						//i = reg[rs] >> 2 - PC >> 2 - 1;
 						break;
 				}
 				break;
@@ -124,16 +133,17 @@ void read_i_memory(int load_num){
 				//PC_now = (PC_now+4)>>28<<28 | C<<2
 				//PC_now = 4*i + PC
 				printf("j\n");
-				C = i_memory[i] << 6 >> 6;
-				i = (((4 * i + PC + 4) >> 28 << 28 | C << 2) - PC) >> 2 - 1;
+				//C = i_memory[i] << 6 >> 6;
+				//i = (((4 * i + PC + 4) >> 28 << 28 | C << 2) - PC) >> 2 - 1;
 				break;
 			case jal:
 				//PC_now = 4*i + PC
 				printf("jal\n");
-				C = i_memory[i] << 6 >> 6;
-				reg[31] = (PC + 4 * i) + 4;
+				//C = i_memory[i] << 6 >> 6;
+				//reg[31] = (PC + 4 * i) + 4;
 				break;
 			case halt: 
+				printf("halt\n");
 				break;
 			default:
 				rs = i_memory[i] << 6 >> 27;
@@ -150,6 +160,7 @@ void read_i_memory(int load_num){
 						break;
 					case lw:
 						printf("lw\n");
+						reg[rt] = d_memory[(reg[rs] + C) >> 2];
 						break;
 					case lh:
 						printf("lh\n");
@@ -158,6 +169,12 @@ void read_i_memory(int load_num){
 					case lhu:
 						printf("lhu\n");
 						//reg[rd] = reg[rs] | reg[rt];
+						break;
+					case lb:
+						printf("lb\n");
+						break;
+					case lbu:
+						printf("lbu\n");
 						break;
 					case sw:
 						printf("sw\n");
@@ -217,6 +234,7 @@ void make_i_memory(char *buffer){
 		load_num = load_num * 256 + (unsigned char)buffer[i];
 	for(i = 0; i < load_num * 4; i++)
 		i_memory[i/4] = i_memory[i/4] * 256 + (unsigned char)buffer[i+8];
+	printf("%d\n", load_num);
 	read_i_memory(load_num);
 	return;  
 }
@@ -255,17 +273,17 @@ int main () {
 	if (i_buffer == NULL || d_buffer == NULL) {fputs ("Memory error",stderr); exit (2);}
 
 	// copy the file into the buffer:
-	i_result = fread(i_memory, 1, i_size, i_file);
+	i_result = fread(i_memory, 4, i_size/4, i_file);
 	d_result = fread(d_memory, 1, d_size, d_file);
 
-	if (i_result != i_size || d_result != d_size) {fputs ("Reading error",stderr); exit (3);}
+	//if (i_result != i_size || d_result != d_size) {fputs ("Reading error",stderr); exit (3);}
 
 	/* the whole file is now loaded in the memory buffer. */
 
 	//make_i_memory(i_buffer);
 	//make_d_memory(d_buffer);
 	
-	read_i_memory(i_size);
+	read_i_memory(i_size/4);
 	
 	// terminate
 	fclose(i_file);
