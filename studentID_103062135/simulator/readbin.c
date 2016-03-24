@@ -47,9 +47,20 @@ int i_size, d_size;
 char *i_buffer, *d_buffer;
 size_t i_result, d_result;
 unsigned int PC, i_memory[1024];
-unsigned int sp;
+unsigned int sp, d_data[256];
 char d_memory[1024];
 unsigned int reg[32];
+
+void read_d_memory(int load_num){
+	int i;
+	for(i = 0; i < load_num; i++){
+		//change 12 34 56 78  to  78 56 34 12
+		d_data[i] = d_data[i] << 24 | d_data[i] >> 8 << 24 >> 8 | d_data[i] >> 16 << 24 >> 16 | d_data[i] >> 24;
+	}
+	for(i = 0; i < d_data[1]; i++){
+		d_memory[i * 4] = 
+	}
+}
 
 void read_i_memory(int load_num){
 	unsigned int i, opcode;
@@ -124,7 +135,7 @@ void read_i_memory(int load_num){
 						//PC_now = 4*i + PC
 						//PC_now = reg[rs]
 						printf("jr\n");
-						//i = reg[rs] >> 2 - PC >> 2 - 1;
+						i = reg[rs] >> 2 - PC >> 2 - 1;
 						break;
 				}
 				break;
@@ -133,14 +144,14 @@ void read_i_memory(int load_num){
 				//PC_now = (PC_now+4)>>28<<28 | C<<2
 				//PC_now = 4*i + PC
 				printf("j\n");
-				//C = i_memory[i] << 6 >> 6;
-				//i = (((4 * i + PC + 4) >> 28 << 28 | C << 2) - PC) >> 2 - 1;
+				C = i_memory[i] << 6 >> 6;
+				i = (((4 * i + PC + 4) >> 28 << 28 | C << 2) - PC) >> 2 - 1;
 				break;
 			case jal:
 				//PC_now = 4*i + PC
 				printf("jal\n");
-				//C = i_memory[i] << 6 >> 6;
-				//reg[31] = (PC + 4 * i) + 4;
+				C = i_memory[i] << 6 >> 6;
+				reg[31] = (PC + 4 * i) + 4;
 				break;
 			case halt: 
 				printf("halt\n");
@@ -149,6 +160,7 @@ void read_i_memory(int load_num){
 				rs = i_memory[i] << 6 >> 27;
 				rt = i_memory[i] << 11 >> 27;
 				C = i_memory[i] << 16 >> 16;
+				int addr = reg[rs] + C;
 				switch(opcode){
 					case addi:
 						printf("addi\n");
@@ -156,66 +168,80 @@ void read_i_memory(int load_num){
 						break;
 					case addiu:
 						printf("addiu\n");
-						reg[rt] = reg[rs] + C;
+						reg[rt] = reg[rs] + (unsigned short)C;
 						break;
 					case lw:
 						printf("lw\n");
-						reg[rt] = d_memory[(reg[rs] + C) >> 2];
+						reg[rt] = d_memory[addr] << 24 | d_memory[addr+1] << 16 + d_memory[addr+2] << 8 | d_memory[addr+3];
 						break;
 					case lh:
 						printf("lh\n");
-						//reg[rd] = reg[rs] & reg[rt];
+						reg[rt] = d_memory[addr] << 8 + d_memory[addr+1];
 						break;
 					case lhu:
 						printf("lhu\n");
-						//reg[rd] = reg[rs] | reg[rt];
+						reg[rt] = (unsigned char)d_memory[addr] << 8 + (unsigned char)d_memory[addr+1];
 						break;
 					case lb:
 						printf("lb\n");
+						reg[rt] = d_memory[reg[rs] + C];
 						break;
 					case lbu:
 						printf("lbu\n");
+						reg[rt] = (unsigned char)d_memory[reg[rs] + C];
 						break;
 					case sw:
 						printf("sw\n");
-						//reg[rd] = reg[rs] ^ reg[rt];
+						d_memory[addr] = reg[rt] >> 24;
+						d_memory[addr+1] = reg[rt] << 8 >> 24;
+						d_memory[addr+2] = reg[rt] << 16 >> 24;
+						d_memory[addr+3] = reg[rt] << 24 >> 24;
 						break;
 					case sh:
 						printf("sh\n");
-						//reg[rd] = ~(reg[rs] | reg[rt]);
+						d_memory[addr] = reg[rt] << 16 >> 24;
+						d_memory[addr+1] = reg[rt] << 24 >> 24;
 						break;
 					case sb:
 						printf("sb\n");
-						//reg[rd] = ~(reg[rs] & reg[rt]);
+						d_memory[reg[rs] + C] = reg[rt] << 24 >> 24;
 						break;
 					case lui:
 						printf("lui\n");
-						//reg[rd] = (reg[rs] < reg[rt]);
+						reg[rt] = C << 16;
 						break;
 					case andi:
 						printf("andi\n");
-						//reg[rd] = reg[rt] << shamt;
+						reg[rt] = reg[rs] & (unsigned short)C;
 						break;
 					case ori:
 						printf("ori\n");
-						//reg[rd] = reg[rt] >> shamt;
+						reg[rt] = reg[rs] | (unsigned short)C;
 						break;
 					case nori:
 						printf("nori\n");
-						//reg[rd] = reg[rt] >> shamt;
+						reg[rt] = ~(reg[rs] | (unsigned short)C);
 						break;
 					case slti:
+						reg[rt] = (reg[rs] < C) ? 1 : 0;
 						printf("slti\n");
-						//PC = reg[rs];
 						break;
 					case beq:
+						//PC_now = 4*i + PC
+						//PC_now + 4 + 4*C = 4*(i + 1 + C) + PC
+						if(reg[rs] == reg[rt])
+							i = i + C; // add 1 after each cycle
 						printf("beq\n");
 						break;
 					case bne:
 						printf("bne\n");
+						if(reg[rs] != reg[rt])
+							i = i + C;
 						break;
 					case bgtz:
 						printf("bgtz\n");
+						if(reg[rs] > 0)
+							i = i + C;
 						break;
 					default:
 						break;
@@ -274,7 +300,7 @@ int main () {
 
 	// copy the file into the buffer:
 	i_result = fread(i_memory, 4, i_size/4, i_file);
-	d_result = fread(d_memory, 1, d_size, d_file);
+	d_result = fread(d_data  , 4, d_size/4, d_file);
 
 	//if (i_result != i_size || d_result != d_size) {fputs ("Reading error",stderr); exit (3);}
 
@@ -284,6 +310,7 @@ int main () {
 	//make_d_memory(d_buffer);
 	
 	read_i_memory(i_size/4);
+	read_d_memory(d_size/4); 
 	
 	// terminate
 	fclose(i_file);
