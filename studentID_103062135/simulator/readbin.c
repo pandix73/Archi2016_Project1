@@ -96,7 +96,9 @@ void read_i_memory(int load_num){
 				rt = i_memory[i] << 11 >> 27;
 				rd = i_memory[i] << 16 >> 27;
 				shamt = i_memory[i] << 21 >> 27;
-				
+				int s_sign = 0;
+				int t_sign = 0;
+
 				if(rd == 0 && funct != jr && (i_memory[i] << 11 >> 11) != 0){
 					fprintf(error, "In cycle %d: Write $0 Error\n", cycle);
 					printf("%08X write zero\n", i_memory[i]);
@@ -105,9 +107,11 @@ void read_i_memory(int load_num){
 
 				switch(funct){
 					case add:
-						printf("add\n");
+						s_sign = reg[rs] >> 31;
+						t_sign = reg[rt] >> 31;
 						reg[rd] = reg[rs] + reg[rt];
-						if(reg[rs] >> 31 == reg[rt] >> 31 && reg[rs] >> 31 != reg[rd] >> 31)
+						printf("add %u = %u + %u\n", reg[rd], reg[rs], reg[rt]);
+						if(s_sign == t_sign && s_sign != reg[rd] >> 31)
 							fprintf(error, "In cycle %d: Number Overflow\n", cycle);
 						break;
 					case addu:
@@ -115,10 +119,11 @@ void read_i_memory(int load_num){
 						reg[rd] = reg[rs] + reg[rt];
 						break;
 					case sub:
-						//printf("sub \n");
+						s_sign = reg[rs] >> 31;
+						t_sign = (~reg[rt] + 1) >> 31;
 						reg[rd] = reg[rs] + (~reg[rt] + 1);
 						printf("sub %d = %d - %d\n", reg[rd], reg[rs], reg[rt]);
-						if(reg[rs] >> 31 == (~reg[rt] + 1) >> 31 && reg[rs] >> 31 != reg[rd] >> 31)
+						if(s_sign == t_sign && s_sign != reg[rd] >> 31)
 							fprintf(error, "In cycle %d: Number Overflow\n", cycle);
 						break;
 					case and:
@@ -142,8 +147,8 @@ void read_i_memory(int load_num){
 						reg[rd] = ~(reg[rs] & reg[rt]);
 						break;
 					case slt:
-						printf("slt\n");
-						reg[rd] = (reg[rs] < reg[rt]);
+						reg[rd] = ((int)reg[rs] < (int)reg[rt]);
+						printf("slt %d = %d < %d\n", reg[rd], reg[rs], reg[rt]);
 						break;
 					case sll:
 						printf("sll\n");
@@ -155,7 +160,7 @@ void read_i_memory(int load_num){
 						break;
 					case sra:
 						printf("sra\n");
-						reg[rd] = reg[rt] >> shamt;
+						reg[rd] = (int)reg[rt] >> shamt;
 						break;
 					case jr:
 						printf("jr\n");
@@ -233,7 +238,7 @@ void read_i_memory(int load_num){
 						break;
 					case lh:
 						printf("lh\n");
-						reg[rt] = (char)d_memory[addr] << 8 | (char)d_memory[addr+1];
+						reg[rt] = (char)d_memory[addr] << 8 | (unsigned char)d_memory[addr+1];
 						break;
 					case lhu:
 						printf("lhu %d %d %hd\n", rs, rt, C);
@@ -280,7 +285,7 @@ void read_i_memory(int load_num){
 						reg[rt] = ~(reg[rs] | (unsigned short)C);
 						break;
 					case slti:
-						reg[rt] = (reg[rs] < C) ? 1 : 0;
+						reg[rt] = ((int)reg[rs] < C) ? 1 : 0;
 						printf("slti\n");
 						break;
 					case beq:
