@@ -86,6 +86,7 @@ void read_i_memory(int load_num){
 		opcode = i_memory[i] >> 26;
 		//printf("%08X ", i_memory[i]);
 		PC = PC + 4;
+
 		printf("cycle %d ", cycle);
 		int w0error = 0;
 		
@@ -101,7 +102,6 @@ void read_i_memory(int load_num){
 
 				if(rd == 0 && funct != jr && (i_memory[i] << 11 >> 11) != 0){
 					fprintf(error, "In cycle %d: Write $0 Error\n", cycle);
-					printf("%08X write zero\n", i_memory[i]);
 					w0error = 1;
 				}
 
@@ -169,9 +169,10 @@ void read_i_memory(int load_num){
 				}
 				break;
 			case j:
-				printf("j\n");
+				printf("j");
 				C_26 = i_memory[i] << 6 >> 6;
 				PC = PC >> 28 << 28 | (unsigned int)C_26 << 2;
+				printf(" %08X\n", PC);
 				break;
 			case jal:
 				printf("jal\n");
@@ -192,7 +193,6 @@ void read_i_memory(int load_num){
 
 				if(opcode <= 37 && opcode >= 8 && rt == 0){
 					fprintf(error, "In cycle %d: Write $0 Error\n", cycle);
-					printf("%d write zero\n", opcode);
 					w0error = 1;
 				}
 				
@@ -201,10 +201,11 @@ void read_i_memory(int load_num){
 						fprintf(error, "In cycle %d: Number Overflow\n", cycle);
 					}
 				}
-
+				
+				printf("%d\n", addr);
 				if(opcode >= 32){
-					if(((opcode == lw || opcode == sw) && (addr+3 > 1023 || addr < 0)) || 
-					   ((opcode == lh || opcode == lhu || opcode == sh) && (addr+1 > 1023 || addr < 0)) || 
+					if(((opcode == lw || opcode == sw) && (addr > 1020 || addr < 0)) || 
+					   ((opcode == lh || opcode == lhu || opcode == sh) && (addr > 1022 || addr < 0)) || 
 					   ((opcode == lb || opcode == lbu || opcode == sb) && (addr > 1023 || addr < 0))){
 						fprintf(error, "In cycle %d: Address Overflow\n", cycle);
 						printf("addr overflow\n");
@@ -317,6 +318,15 @@ void read_i_memory(int load_num){
 		for(reg_n = 0; reg_n < 32; reg_n++){
 			fprintf(snap, "$%02d: 0x%08X\n", reg_n, reg[reg_n]);
 		}fprintf(snap, "PC: 0x%08X\n\n\n", PC);
+		
+		while(PC < i_memory[0]){
+			PC += 4;
+			fprintf(snap, "cycle %d\n", cycle++);
+			for(reg_n = 0; reg_n < 32; reg_n++){
+				fprintf(snap, "$%02d: 0x%08X\n", reg_n, reg[reg_n]);
+			}fprintf(snap, "PC: 0x%08X\n\n\n", PC);
+		}
+
 	}
 }
 
@@ -337,12 +347,6 @@ int main () {
 	d_size = ftell(d_file);
 	rewind(i_file);
 	rewind(d_file);
-
-	// allocate memory to contain the whole file:
-	i_buffer = (char*)malloc(sizeof(char)*i_size);
-	d_buffer = (char*)malloc(sizeof(char)*d_size);
-
-	if (i_buffer == NULL || d_buffer == NULL) {fputs ("Memory error",stderr); exit (2);}
 
 	// copy the file into the buffer:
 	i_result = fread(i_memory, 4, i_size/4, i_file);
