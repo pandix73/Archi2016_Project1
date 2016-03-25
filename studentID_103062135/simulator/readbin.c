@@ -42,7 +42,7 @@
 // S
 #define halt 63  
 
-FILE *i_file, *d_file;
+FILE *i_file, *d_file, *error, *snap;
 int i_size, d_size;
 char *i_buffer, *d_buffer;
 size_t i_result, d_result;
@@ -63,7 +63,6 @@ void read_d_memory(int load_num){
 		d_memory[i*4 + 1] = d_data[i+2] << 8 >> 24;
 		d_memory[i*4 + 2] = d_data[i+2] << 16 >> 24;
 		d_memory[i*4 + 3] = d_data[i+2] << 24 >> 24;
-		//printf("%X, %X, %X, %X\n", d_memory[i*4], d_memory[i*4+1], d_memory[i*4+2], d_memory[i*4+3]);
 	}
 }
 
@@ -75,14 +74,21 @@ void read_i_memory(int load_num){
 		//change 12 34 56 78  to  78 56 34 12
 		i_memory[i] = i_memory[i] << 24 | i_memory[i] >> 8 << 24 >> 8 | i_memory[i] >> 16 << 24 >> 16 | i_memory[i] >> 24;
 	}
-	//printf("%u\n", i_memory[0]);	
 	PC = i_memory[0];
 	int cycle = 0;
+
+	fprintf(snap, "cycle %d\n", cycle++);
+	for(i = 0; i < 32; i++){
+		fprintf(snap, "$%02d: 0x%08X\n", i, reg[i]);
+	}fprintf(snap, "PC: 0x%08X\n\n\n", PC);
+	
 	for(i = 2; i < load_num; i = ((PC-i_memory[0]) >> 2) + 2){
 		opcode = i_memory[i] >> 26;
-		printf("%08X ", i_memory[i]);
+		//printf("%08X ", i_memory[i]);
 		PC = PC + 4;
-		//printf("\n");
+		printf("cycle %d ", cycle);
+		int w0error = 0;
+		
 		switch(opcode){
 			case R: 
 				funct = i_memory[i] << 26 >> 26;
@@ -90,18 +96,30 @@ void read_i_memory(int load_num){
 				rt = i_memory[i] << 11 >> 27;
 				rd = i_memory[i] << 16 >> 27;
 				shamt = i_memory[i] << 21 >> 27;
+				
+				if(rd == 0 && funct != jr && (i_memory[i] << 11 >> 11) != 0){
+					fprintf(error, "In cycle %d: Write $0 Error\n", cycle);
+					printf("%08X write zero\n", i_memory[i]);
+					w0error = 1;
+				}
+
 				switch(funct){
 					case add:
 						printf("add\n");
 						reg[rd] = reg[rs] + reg[rt];
+						if(reg[rs] >> 31 == reg[rt] >> 31 && reg[rs] >> 31 != reg[rd] >> 31)
+							fprintf(error, "In cycle %d: Number Overflow\n", cycle);
 						break;
 					case addu:
 						printf("addu\n");
 						reg[rd] = reg[rs] + reg[rt];
 						break;
 					case sub:
-						printf("sub\n");
-						reg[rd] = reg[rs] - reg[rt];
+						//printf("sub \n");
+						reg[rd] = reg[rs] + (~reg[rt] + 1);
+						printf("sub %d = %d - %d\n", reg[rd], reg[rs], reg[rt]);
+						if(reg[rs] >> 31 == (~reg[rt] + 1) >> 31 && reg[rs] >> 31 != reg[rd] >> 31)
+							fprintf(error, "In cycle %d: Number Overflow\n", cycle);
 						break;
 					case and:
 						printf("and\n");
@@ -165,10 +183,45 @@ void read_i_memory(int load_num){
 				rt = i_memory[i] << 11 >> 27;
 				C = i_memory[i] << 16 >> 16;
 				int addr = reg[rs] + C;
+				int halterror = 0;
+
+				if(opcode <= 37 && opcode >= 8 && rt == 0){
+					fprintf(error, "In cycle %d: Write $0 Error\n", cycle);
+					printf("%d write zero\n", opcode);
+					w0error = 1;
+				}
+				
+				if(opcode >= 32 || opcode == 8){
+					if((reg[rs] >> 31) == ((unsigned short)C >> 15) && (reg[rs] >> 31) != ((unsigned int)addr >> 31)){
+						fprintf(error, "In cycle %d: Number Overflow\n", cycle);
+					}
+				}
+
+				if(opcode >= 32){
+					if(((opcode == lw || opcode == sw) && (addr+3 > 1023 || addr < 0)) || 
+					   ((opcode == lh || opcode == lhu || opcode == sh) && (addr+1 > 1023 || addr < 0)) || 
+					   ((opcode == lb || opcode == lbu || opcode == sb) && (addr > 1023 || addr < 0))){
+						fprintf(error, "In cycle %d: Address Overflow\n", cycle);
+						printf("addr overflow\n");
+						halterror = 1;
+					}
+				}
+				
+				if(opcode >= 32){
+					if(((opcode == lw || opcode == sw) && (addr % 4) != 0) || 
+					   ((opcode == lh || opcode == lhu || opcode == sh) && (addr % 2) != 0)){
+						fprintf(error, "In cycle %d: Misalignment Error\n", cycle);
+						halterror = 1;	
+					}
+				}
+
+				if(halterror == 1)return;
+
 				switch(opcode){
 					case addi:
-						printf("addi\n");
-						reg[rt] = reg[rs] + C;
+						//printf("addi %d = %d + %hd\n", rt, rs, C);
+						reg[rt] = addr;
+						printf("addi %d(%d) = %d(%d) + %hd(%d)\n", reg[rt],reg[rt] >> 31, reg[rs],reg[rs] >> 31, C,(unsigned short)C >> 15);
 						break;
 					case addiu:
 						printf("addiu\n");
@@ -208,7 +261,7 @@ void read_i_memory(int load_num){
 						break;
 					case sb:
 						printf("sb\n");
-						d_memory[reg[rs] + C] = reg[rt] << 24 >> 24;
+						d_memory[addr] = reg[rt] << 24 >> 24;
 						break;
 					case lui:
 						printf("lui\n");
@@ -239,7 +292,6 @@ void read_i_memory(int load_num){
 						printf("bne %d %d\n", rs, rt);
 						if(reg[rs] != reg[rt])
 							PC += C << 2;
-						printf("%d\n", i+1);
 						break;
 					case bgtz:
 						printf("bgtz\n");
@@ -250,44 +302,26 @@ void read_i_memory(int load_num){
 				break;
 		}
 
-		printf("cycle%d:\n", ++cycle);
+		if(w0error == 1){
+			reg[0] = 0;
+			w0error = 0;
+		}
+
+		fprintf(snap, "cycle %d\n", cycle++);
 		int reg_n;
 		for(reg_n = 0; reg_n < 32; reg_n++){
-			printf("$%02d:0x%08X\n", reg_n, reg[reg_n]);
-		}printf("PC:%X\n", PC);
+			fprintf(snap, "$%02d: 0x%08X\n", reg_n, reg[reg_n]);
+		}fprintf(snap, "PC: 0x%08X\n\n\n", PC);
 	}
 }
 
-void make_i_memory(char *buffer){
-	int i;
-	unsigned int load_num = 0;
-	for(i = 0; i < 4; i++)
-		PC = PC * 256 + (unsigned char)buffer[i];
-	for(i = 4; i < 8; i++)
-		load_num = load_num * 256 + (unsigned char)buffer[i];
-	for(i = 0; i < load_num * 4; i++)
-		i_memory[i/4] = i_memory[i/4] * 256 + (unsigned char)buffer[i+8];
-	printf("%d\n", load_num);
-	read_i_memory(load_num);
-	return;  
-}
-
-void make_d_memory(char *buffer){
-	int i;
-	unsigned int load_num = 0;
-	for(i = 0; i < 4; i++)
-		sp = sp * 256 + (unsigned char)buffer[i];
-	for(i = 4; i < 8; i++)
-		load_num = load_num * 256 + (unsigned char)buffer[i];
-	for(i = 0; i < load_num * 4; i++)
-		d_memory[i/4] = d_memory[i/4] * 256 + (unsigned char)buffer[i+8];
-	return;  
-}
 
 int main () {
 
 	i_file = fopen("iimage.bin", "rb");
 	d_file = fopen("dimage.bin", "rb");
+	error = fopen("error_dump.rpt", "w");
+	snap = fopen("snapshot.rpt", "w");
 
 	if (i_file == NULL || d_file == NULL) {fputs ("File error",stderr); exit (1);}
 
@@ -312,9 +346,6 @@ int main () {
 	//if (i_result != i_size || d_result != d_size) {fputs ("Reading error",stderr); exit (3);}
 
 	/* the whole file is now loaded in the memory buffer. */
-
-	//make_i_memory(i_buffer);
-	//make_d_memory(d_buffer);
 	
 	read_d_memory(d_size/4); 
 	read_i_memory(i_size/4);
@@ -322,6 +353,7 @@ int main () {
 	// terminate
 	fclose(i_file);
 	fclose(d_file);
+	fclose(error);
 	free(i_buffer);
 	free(d_buffer);
 	return 0;
