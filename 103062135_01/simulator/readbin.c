@@ -46,14 +46,18 @@ FILE *i_file, *d_file, *error, *snap;
 int i_size, d_size;
 char *i_buffer, *d_buffer;
 size_t i_result, d_result;
-unsigned int PC, i_memory[1024];
-unsigned int sp, d_data[256];
+unsigned int PC, i_memory[1026];
+unsigned int sp, d_data[1026];
 unsigned char d_memory[1024];
 unsigned int reg[32];
 
 void read_d_memory(int load_num){
 	int i;
-	for(i = 0; i < load_num; i++){
+	for(i = 0; i < 2; i++){
+		//change 12 34 56 78  to  78 56 34 12
+		d_data[i] = d_data[i] << 24 | d_data[i] >> 8 << 24 >> 8 | d_data[i] >> 16 << 24 >> 16 | d_data[i] >> 24;
+	}
+	for(i = 2; i < 2+d_data[1]; i++){
 		//change 12 34 56 78  to  78 56 34 12
 		d_data[i] = d_data[i] << 24 | d_data[i] >> 8 << 24 >> 8 | d_data[i] >> 16 << 24 >> 16 | d_data[i] >> 24;
 	}
@@ -70,7 +74,11 @@ void read_i_memory(int load_num){
 	unsigned int i, opcode;
 	int funct, rs, rt, rd, shamt, C_26;
 	short C;
-	for(i = 0; i < load_num; i++){
+	for(i = 0; i < 2; i++){
+		//change 12 34 56 78  to  78 56 34 12
+		i_memory[i] = i_memory[i] << 24 | i_memory[i] >> 8 << 24 >> 8 | i_memory[i] >> 16 << 24 >> 16 | i_memory[i] >> 24;
+	}
+	for(i = 2; i < 2+i_memory[1]; i++){
 		//change 12 34 56 78  to  78 56 34 12
 		i_memory[i] = i_memory[i] << 24 | i_memory[i] >> 8 << 24 >> 8 | i_memory[i] >> 16 << 24 >> 16 | i_memory[i] >> 24;
 	}
@@ -82,7 +90,7 @@ void read_i_memory(int load_num){
 		fprintf(snap, "$%02d: 0x%08X\n", i, reg[i]);
 	}fprintf(snap, "PC: 0x%08X\n\n\n", PC);
 	
-	for(i = 2; i < load_num; i = ((PC-i_memory[0]) >> 2) + 2){
+	for(i = 2; i < 2+i_memory[1]; i = ((PC-i_memory[0]) >> 2) + 2){
 		opcode = i_memory[i] >> 26;
 		//printf("%08X ", i_memory[i]);
 		PC = PC + 4;
@@ -188,7 +196,7 @@ void read_i_memory(int load_num){
 				rs = i_memory[i] << 6 >> 27;
 				rt = i_memory[i] << 11 >> 27;
 				C = i_memory[i] << 16 >> 16;
-				int addr = reg[rs] + C;
+				int addr = (int)reg[rs] + (int)C;
 				int halterror = 0;
 
 				if(opcode <= 37 && opcode >= 8 && rt == 0){
@@ -233,15 +241,17 @@ void read_i_memory(int load_num){
 						reg[rt] = addr;
 						break;
 					case lw:
-						printf("lw\n");
+						printf("lw");
 						reg[rt] = d_memory[addr] << 24 | d_memory[addr+1] << 16 | d_memory[addr+2] << 8 | d_memory[addr+3];
+						printf(" %d %d %d %08X %08X\n",C, reg[rs], addr ,reg[rt], d_data[addr/4]);
 						break;
 					case lh:
-						printf("lh\n");
+						printf("lh, %08X, %08X", d_memory[addr], d_memory[addr+1]);
 						reg[rt] = (char)d_memory[addr] << 8 | (unsigned char)d_memory[addr+1];
+						printf(" %08X\n", reg[rt]);
 						break;
 					case lhu:
-						printf("lhu %d %d %hd\n", rs, rt, C);
+						printf("lhu %d %d %hd %d\n", rt, reg[rs], C, addr);
 						reg[rt] = (unsigned char)d_memory[addr] << 8 | (unsigned char)d_memory[addr+1];
 						break;
 					case lb:
@@ -302,7 +312,7 @@ void read_i_memory(int load_num){
 						break;
 					case bgtz:
 						printf("bgtz\n");
-						if(reg[rs] > 0)
+						if((int)reg[rs] > 0)
 							PC += C << 2;
 						break;
 				}
@@ -345,7 +355,9 @@ int main () {
 	fseek (i_file , 0 , SEEK_END);
 	fseek (d_file , 0 , SEEK_END);
 	i_size = ftell(i_file);
+	if(i_size > 1026)i_size = 1026;
 	d_size = ftell(d_file);
+	if(d_size > 1126)d_size = 1126;
 	rewind(i_file);
 	rewind(d_file);
 
