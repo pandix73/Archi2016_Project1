@@ -92,10 +92,7 @@ void read_i_memory(int load_num){
 	
 	for(i = 2; i < 2+i_memory[1]; i = ((PC-i_memory[0]) >> 2) + 2){
 		opcode = i_memory[i] >> 26;
-		//printf("%08X ", i_memory[i]);
 		PC = PC + 4;
-
-		printf("cycle %d ", cycle);
 		int w0error = 0;
 		
 		switch(opcode){
@@ -118,78 +115,61 @@ void read_i_memory(int load_num){
 						s_sign = reg[rs] >> 31;
 						t_sign = reg[rt] >> 31;
 						reg[rd] = reg[rs] + reg[rt];
-						printf("add %u = %u + %u\n", reg[rd], reg[rs], reg[rt]);
 						if(s_sign == t_sign && s_sign != reg[rd] >> 31)
 							fprintf(error, "In cycle %d: Number Overflow\n", cycle);
 						break;
 					case addu:
-						printf("addu\n");
 						reg[rd] = reg[rs] + reg[rt];
 						break;
 					case sub:
 						s_sign = reg[rs] >> 31;
 						t_sign = (~reg[rt] + 1) >> 31;
 						reg[rd] = reg[rs] + (~reg[rt] + 1);
-						printf("sub %d = %d - %d\n", reg[rd], reg[rs], reg[rt]);
 						if(s_sign == t_sign && s_sign != reg[rd] >> 31)
 							fprintf(error, "In cycle %d: Number Overflow\n", cycle);
 						break;
 					case and:
-						printf("and\n");
 						reg[rd] = reg[rs] & reg[rt];
 						break;
 					case or:
-						printf("or\n");
 						reg[rd] = reg[rs] | reg[rt];
 						break;
 					case xor:
-						printf("xor\n");
 						reg[rd] = reg[rs] ^ reg[rt];
 						break;
 					case nor:
-						printf("nor\n");
 						reg[rd] = ~(reg[rs] | reg[rt]);
 						break;
 					case nand:
-						printf("nand\n");
 						reg[rd] = ~(reg[rs] & reg[rt]);
 						break;
 					case slt:
 						reg[rd] = ((int)reg[rs] < (int)reg[rt]);
-						printf("slt %d = %d < %d\n", reg[rd], reg[rs], reg[rt]);
 						break;
 					case sll:
-						printf("sll\n");
 						reg[rd] = reg[rt] << shamt;
 						break;
 					case srl:
-						printf("srl\n");
 						reg[rd] = reg[rt] >> shamt;
 						break;
 					case sra:
-						printf("sra\n");
 						reg[rd] = (int)reg[rt] >> shamt;
 						break;
 					case jr:
-						printf("jr\n");
 						PC = reg[rs];
 						break;
 				}
 				break;
 			case j:
-				printf("j");
 				C_26 = i_memory[i] << 6 >> 6;
 				PC = PC >> 28 << 28 | (unsigned int)C_26 << 2;
-				printf(" %08X\n", PC);
 				break;
 			case jal:
-				printf("jal\n");
 				C_26 = i_memory[i] << 6 >> 6;
 				reg[31] = PC;
 				PC = PC >> 28 << 28 | (unsigned int)C_26 << 2;
 				break;
 			case halt: 
-				printf("halt\n");
 				return;
 				break;
 			default:
@@ -215,7 +195,6 @@ void read_i_memory(int load_num){
 					   ((opcode == lh || opcode == lhu || opcode == sh) && (addr > 1022 || addr < 0)) || 
 					   ((opcode == lb || opcode == lbu || opcode == sb) && (addr > 1023 || addr < 0))){
 						fprintf(error, "In cycle %d: Address Overflow\n", cycle);
-						printf("addr overflow\n");
 						halterror = 1;
 					}
 				}
@@ -232,86 +211,63 @@ void read_i_memory(int load_num){
 
 				switch(opcode){
 					case addi:
-						//printf("addi %d = %d + %hd\n", rt, rs, C);
 						reg[rt] = addr;
-						printf("addi %d(%d) = %d(%d) + %hd(%d)\n", reg[rt],reg[rt] >> 31, reg[rs],reg[rs] >> 31, C,(unsigned short)C >> 15);
 						break;
 					case addiu:
-						printf("addiu\n");
 						reg[rt] = addr;
 						break;
 					case lw:
-						printf("lw");
 						reg[rt] = d_memory[addr] << 24 | d_memory[addr+1] << 16 | d_memory[addr+2] << 8 | d_memory[addr+3];
-						printf(" %d %d %d %08X %08X\n",C, reg[rs], addr ,reg[rt], d_data[addr/4]);
 						break;
 					case lh:
-						printf("lh, %08X, %08X", d_memory[addr], d_memory[addr+1]);
 						reg[rt] = (char)d_memory[addr] << 8 | (unsigned char)d_memory[addr+1];
-						printf(" %08X\n", reg[rt]);
 						break;
 					case lhu:
-						printf("lhu %d %d %hd %d\n", rt, reg[rs], C, addr);
 						reg[rt] = (unsigned char)d_memory[addr] << 8 | (unsigned char)d_memory[addr+1];
 						break;
 					case lb:
-						printf("lb\n");
 						reg[rt] = (char)d_memory[reg[rs] + C];
 						break;
 					case lbu:
-						printf("lbu\n");
 						reg[rt] = (unsigned char)d_memory[reg[rs] + C];
 						break;
 					case sw:
-						printf("sw\n");
 						d_memory[addr] = reg[rt] >> 24;
 						d_memory[addr+1] = reg[rt] << 8 >> 24;
 						d_memory[addr+2] = reg[rt] << 16 >> 24;
 						d_memory[addr+3] = reg[rt] << 24 >> 24;
 						break;
 					case sh:
-						printf("sh");
 						d_memory[addr] = reg[rt] << 16 >> 24;
 						d_memory[addr+1] = reg[rt] << 24 >> 24;
-						printf(" , %d, %02X, %02X\n", addr, d_memory[addr], d_memory[addr+1]);
 						break;
 					case sb:
-						printf("sb");
 						d_memory[addr] = reg[rt] << 24 >> 24;
-						printf(" , %d, %02X\n", addr, d_memory[addr]);
 						break;
 					case lui:
-						printf("lui\n");
 						reg[rt] = C << 16;
 						break;
 					case andi:
-						printf("andi\n");
 						reg[rt] = reg[rs] & (unsigned short)C;
 						break;
 					case ori:
-						printf("ori\n");
 						reg[rt] = reg[rs] | (unsigned short)C;
 						break;
 					case nori:
-						printf("nori\n");
 						reg[rt] = ~(reg[rs] | (unsigned short)C);
 						break;
 					case slti:
 						reg[rt] = ((int)reg[rs] < C) ? 1 : 0;
-						printf("slti\n");
 						break;
 					case beq:
 						if(reg[rs] == reg[rt])
 							PC += C << 2;
-						printf("beq\n");
 						break;
 					case bne:
-						printf("bne %d %d\n", rs, rt);
 						if(reg[rs] != reg[rt])
 							PC += C << 2;
 						break;
 					case bgtz:
-						printf("bgtz\n");
 						if((int)reg[rs] > 0)
 							PC += C << 2;
 						break;
@@ -365,10 +321,6 @@ int main () {
 	i_result = fread(i_memory, 4, i_size/4, i_file);
 	d_result = fread(d_data  , 4, d_size/4, d_file);
 
-	//if (i_result != i_size || d_result != d_size) {fputs ("Reading error",stderr); exit (3);}
-
-	/* the whole file is now loaded in the memory buffer. */
-	
 	read_d_memory(d_size/4); 
 	read_i_memory(i_size/4);
 		
